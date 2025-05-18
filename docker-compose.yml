@@ -1,0 +1,30 @@
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    ports:
+      - "27017:27017"          # localhost:27017 → kontener
+    volumes:
+      - mongo-data:/data/db
+
+# Dodaj serwis dla aplikacji frontend + backend
+  finassist:
+    build: .
+    # Konfiguracja zmiennych środowiskowych, w tym URI do MongoDB
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      MONGO_URI: mongodb://mongo:27017/finassist # Użyj nazwy serwisu mongo
+      # Skopiuj klucze VAPID z .env do środowiska kontenera
+      VAPID_SUBJECT: ${VAPID_SUBJECT}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
+    ports:
+      - "3001:3001" # Wystaw port aplikacji
+    depends_on:
+      - mongo # Upewnij się, że mongo wystartuje przed aplikacją
+    restart: unless-stopped
+
+volumes:
+  mongo-data:
+    driver: local

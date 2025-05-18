@@ -1,0 +1,17 @@
+{
+    "name": "finassist",
+    "version": "0.1.0",
+    "type": "module",
+    "scripts": {
+        "start": "node server.js",
+        "seed": "node seed.js"
+    },
+    "dependencies": {
+        "dotenv": "^16.4.1",
+        "express": "^4.19.2",
+        "mongoose": "^8.3.3"
+    },
+    "devDependencies": {
+        "web-push": "^3.6.7"
+    }
+}

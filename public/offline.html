@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <title>FinAssist - Offline</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="css/style.css"> <!-- Możemy użyć tych samych stylów -->
+</head>
+<body>
+  <h1>Brak internetu</h1>
+  <p>Jesteś offline. Transakcje dodane teraz zostaną zsynchronizowane po powrocie połączenia.</p>
+
+  <!-- Przeniesiony formularz transakcji z index.html -->
+  <section id="add">
+    <h2>Nowa transakcja (Offline)</h2>
+    <form id="tx-form">
+      <select name="type">
+        <option value="expense">Wydatek</option>
+        <option value="income">Przychód</option>
+      </select>
+      <input name="amount" type="number" step="0.01" placeholder="Kwota" required>
+      <input name="category" placeholder="Kategoria" required>
+      <button type="submit">Zapisz (Offline)</button>
+    </form>
+  </section>
+
+  <!-- Odwołanie do skryptu JavaScript, który obsługuje formularz i Local Storage -->
+  <script defer src="js/app.js" type="module"></script>
+</body>
+</html>

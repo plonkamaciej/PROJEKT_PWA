@@ -1,0 +1,148 @@
+body {
+  font-family: sans-serif;
+  max-width: 1400px;
+  margin: auto;
+  padding: 1rem;
+  background-color: #f4f4f4;
+  color: #333;
+
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: auto auto auto auto 1fr;
+  gap: 1.5rem;
+  height: 100vh;
+  overflow-y: hidden;
+}
+
+#app-header {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  margin-bottom: 1.5rem;
+}
+
+#app-header h1 {
+  margin: 0;
+  font-size: 1.8rem;
+}
+
+#user-info {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+#user-info p {
+  margin: 0;
+  font-size: 1rem;
+  color: #555;
+}
+
+#user-info strong {
+  color: #007bff;
+}
+
+#add {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+#report {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+#budget {
+  grid-column: 3;
+  grid-row: 2;
+}
+
+#list {
+  grid-column: 1;
+  grid-row: 3;
+  overflow-y: auto;
+}
+
+#report-analysis {
+  grid-column: 2 / -1;
+  grid-row: 3;
+  overflow-y: auto;
+}
+
+body > section {
+  background-color: #fff;
+  padding: 1.5rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+form {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+input, select, button {
+  padding: .6rem .8rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 1rem;
+}
+
+button {
+  cursor: pointer;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  transition: background-color 0.2s ease;
+}
+
+button:hover {
+  background-color: #0056b3;
+}
+
+ul {
+  list-style: none;
+  padding: 0;
+}
+
+li {
+  background-color: #f9f9f9;
+  padding: 1rem;
+  margin-bottom: .8rem;
+  border-radius: 6px;
+  border: 1px solid #eee;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+li span {
+  font-weight: bold;
+  margin-left: .5rem;
+}
+
+#report-analysis div {
+  margin-bottom: 1rem;
+  padding: 1rem;
+  background-color: #f9f9f9;
+  border-radius: 6px;
+  border: 1px solid #eee;
+}
+
+#report-analysis h3 {
+  margin-top: 0;
+  color: #555;
+}
+
+#list, #report-analysis {
+  min-height: 0;
+}

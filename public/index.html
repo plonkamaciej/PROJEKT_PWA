@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <title>FinAssist</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="manifest" href="js/manifest.json">
+  <link rel="stylesheet" href="css/style.css">
+  <script defer src="js/app.js" type="module"></script>
+</head>
+<body>
+  <header id="app-header">
+    <h1>FinAssist – szybkie finanse</h1>
+
+    <!-- Elementy użytkownika i wylogowania przeniesione do nagłówka -->
+    <div id="user-info" style="display: none;">
+      <p>Zalogowany jako: <strong id="logged-in-user"></strong></p>
+      <button id="logout-button">Wyloguj</button>
+    </div>
+  </header>
+
+  <div id="auth-container">
+    <h2>Logowanie / Rejestracja</h2>
+    <form id="auth-form">
+      <div>
+        <label for="login">Login:</label>
+        <input type="text" id="login" name="login" required>
+      </div>
+      <div>
+        <label for="password">Hasło:</label>
+        <input type="password" id="password" name="password" required>
+      </div>
+      <button type="submit" id="login-button">Zaloguj</button>
+      <button type="submit" id="register-button">Zarejestruj</button>
+    </form>
+    <p id="auth-message"></p>
+  </div>
+
+  <!-- Sekcje aplikacji - pozostają jako bezpośredni potomkowie body dla układu siatki -->
+  <section id="add">
+    <h2>Nowa transakcja</h2>
+    <form id="tx-form">
+      <select name="type">
+        <option value="expense">Wydatek</option>
+        <option value="income">Przychód</option>
+      </select>
+      <input name="amount" type="number" step="0.01" placeholder="Kwota" required>
+      <input name="category" placeholder="Kategoria" required>
+      <button type="submit">Zapisz</button>
+    </form>
+  </section>
+
+  <section id="report">
+    <h2>Podsumowanie</h2>
+    <p>Łącznie przychody: <span id="inc">0</span> zł</p>
+    <p>Łącznie wydatki: <span id="exp">0</span> zł</p>
+    <p>Bilans: <strong id="bal">0</strong> zł</p>
+  </section>
+
+  <section id="list">
+    <h2>Historia</h2>
+    <ul id="tx-list"></ul>
+  </section>
+
+  <section id="budget">
+    <h2>Budżetowanie</h2>
+    <form id="budget-form">
+      <input name="category" placeholder="Kategoria" required>
+      <input name="limit" type="number" step="0.01" placeholder="Limit" required>
+      <button type="submit">Ustaw budżet</button>
+    </form>
+    <ul id="budget-list"></ul>
+  </section>
+
+  <section id="report-analysis">
+    <h2>Raporty i Analiza</h2>
+    <!-- Tutaj dodamy elementy do wyświetlania raportów -->
+    <div id="monthly-summary"></div>
+    <div id="category-breakdown"></div>
+  </section>
+
+  <noscript>Ta aplikacja wymaga JavaScript.</noscript>
+</body>
+</html>
