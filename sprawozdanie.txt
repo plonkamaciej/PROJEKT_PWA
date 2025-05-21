@@ -1,0 +1,109 @@
+## Sprawozdanie z projektu aplikacji PWA do zarządzania finansami - FinAssist
+
+### 1. Wprowadzenie i Cele Projektu
+
+Aplikacja FinAssist została zaprojektowana jako Progressive Web Application (PWA) w celu umożliwienia użytkownikom efektywnego śledzenia i zarządzania osobistymi finansami, ze szczególnym uwzględnieniem wydatków i przychodów. Kluczowe cele projektu obejmują:
+
+- **Intuicyjne śledzenie transakcji:** Umożliwienie łatwego wprowadzania i kategoryzowania wydatków oraz przychodów.
+- **Funkcje budżetowania:** Wsparcie w zarządzaniu budżetem domowym poprzez ustawianie limitów dla poszczególnych kategorii.
+- **Raportowanie i analiza:** Dostarczanie użytkownikom narzędzi do wizualizacji i analizy ich wzorców wydatków i przychodów.
+- **Powiadomienia:** Informowanie użytkowników o ważnych zdarzeniach finansowych, takich jak przekroczenie budżetu, za pomocą powiadomień push.
+- **Dostępność PWA:** Zapewnienie możliwości instalacji aplikacji na urządzeniach, działania offline (w ograniczonym zakresie) i szybkiego dostępu.
+- **Trwałe przechowywanie danych:** Wykorzystanie bazy danych MongoDB do bezpiecznego i skalowalnego przechowywania danych użytkowników.
+
+### 2. Architektura Aplikacji
+
+Projekt FinAssist architekturę klient-serwer, gdzie:
+
+- **Front-end:** Jest zrealizowany jako Progressive Web Application (PWA). Działa w przeglądarce użytkownika, zapewniając interfejs użytkownika i logikę po stronie klienta. PWA wykorzystuje standardowe technologie webowe (HTML, CSS, JavaScript) wzbogacone o Service Worker i Manifest, aby dostarczyć doświadczenie zbliżone do aplikacji natywnych (instalacja, praca offline, powiadomienia push).
+- **Back-end:** Jest zbudowany w oparciu o Node.js z frameworkiem Express. Pełni rolę serwera API, który obsługuje żądania z front-endu, zarządza dostępem do bazy danych MongoDB, wysyła powiadomienia push i w przyszłości będzie odpowiedzialny za generowanie raportów PDF.
+- **Baza Danych:** Wykorzystywana jest nierelacyjna baza danych MongoDB do przechowywania wszystkich danych aplikacji (użytkownicy, transakcje, budżety, subskrypcje powiadomień). Wybór MongoDB podyktowany jest elastycznością schematu danych i dobrą integracją z Node.js (Mongoose).
+
+Komunikacja między front-endem a back-endem odbywa się za pomocą asynchronicznych żądań HTTP (API RESTful).
+
+### 3. Opis Kluczowych Komponentów i Plików
+
+Projekt składa się z kilku kluczowych plików, które realizują poszczególne części funkcjonalności:
+
+#### 3.1. `public/index.html`
+
+Jest to główny plik struktury front-endu. Definiuje podstawowy układ strony i zawiera linki do niezbędnych zasobów:
+
+- **Struktura HTML:** Zawiera sekcje dla różnych części interfejsu: formularz logowania/rejestracji (`#auth-container`), formularz dodawania transakcji (`#add`), sekcję podsumowania (`#report`), listę transakcji (`#list`), sekcję budżetowania (`#budget`) oraz miejsce na raporty i analizę (`#report-analysis`).
+- **Link do Manifestu:** `<link rel="manifest" href="js/manifest.json">` - Kluczowy element PWA. Informuje przeglądarkę o pliku manifestu aplikacji, co umożliwia jej rozpoznanie jako PWA i zainstalowanie.
+- **Dołączone Zasoby:** Plik dołącza arkusz stylów (`css/style.css`) oraz główny skrypt JavaScript aplikacji (`js/app.js`) z użyciem `type="module"`, co pozwala na modularne zarządzanie kodem front-endowym. Zakłada się, że plik `js/app.js` zawiera logikę obsługującą interakcje użytkownika, wysyłanie danych do API back-endu i rejestrację Service Workera.
+
+#### 3.2. `public/js/manifest.json`
+
+Plik JSON zawierający metadane opisujące aplikację webową jako PWA. Służy do konfigurowania wyglądu i zachowania aplikacji po zainstalowaniu na urządzeniu użytkownika:
+
+- **`name` i `short_name`:** Pełna i skrócona nazwa aplikacji wyświetlana użytkownikowi (np. na ekranie głównym).
+- **`start_url`:** Ścieżka URL, która zostanie załadowana po uruchomieniu aplikacji z ikony. W tym przypadku `/index.html`, co kieruje do głównej strony aplikacji.
+- **`display`:** Określa preferowany tryb wyświetlania aplikacji. Wartość `standalone` powoduje, że aplikacja jest uruchamiana w dedykowanym oknie, bez typowych elementów interfejsu przeglądarki, co daje wrażenie aplikacji natywnej.
+- **`background_color` i `theme_color`:** Wpływają na wygląd przeglądarki i ekranu powitalnego (splash screen) podczas ładowania aplikacji.
+- **`icons`:** Tablica obiektów definiujących ikony aplikacji w różnych rozmiarach. Są one używane przez system operacyjny do wyświetlania ikony na ekranie głównym, w przełączniku aplikacji itp. Wartość `"purpose": "any maskable"` wskazuje, że ikony są zaprojektowane tak, aby dobrze wyglądały w różnych kształtach masek stosowanych przez systemy operacyjne.
+
+#### 3.3. `public/service-worker.js`
+
+Ten plik zawiera skrypt Service Workera, który działa w tle niezależnie od głównej strony aplikacji. Jest kluczowy dla włączenia funkcjonalności PWA, takich jak praca offline, cache'owanie zasobów i obsługa powiadomień push. Jego główne funkcje to:
+
+- **Cache'owanie App Shell (`install` event):** Podczas instalacji Service Workera (zdarzenie `install`), skrypt otwiera dedykowany cache (`finassist-cache-v1`) i pobiera zdefiniowaną listę statycznych zasobów (`urlsToCache`), zapisując je w cache'u. Gwarantuje to, że podstawowy interfejs aplikacji (App Shell) będzie dostępny nawet bez połączenia z internetem.
+- **Zarządzanie Cache'ami (`activate` event):** Po aktywacji nowego Service Workera (zdarzenie `activate`), skrypt usuwa stare wersje cache'a, zapobiegając zajmowaniu niepotrzebnego miejsca i zapewniając, że użytkownik zawsze korzysta z najnowszych zasobów App Shell.
+- **Obsługa Żądań Sieciowych (`fetch` event):** Service Worker przechwytuje wszystkie żądania sieciowe wychodzące z aplikacji. Stosuje strategię "Cache-first, falling back to network": najpierw szuka żądanego zasobu w cache'u. Jeśli znajdzie, zwraca go natychmiast (szybkie ładowanie offline/online). Jeśli nie znajdzie, próbuje pobrać zasób z sieci. Jeśli pobieranie się powiedzie, zasób może zostać opcjonalnie dodany do cache'a (z wyłączeniem żądań API). W przypadku braku połączenia i nieznalezienia zasobu w cache'u, dla żądań nawigacji (`mode === 'navigate'`), Service Worker może zwrócić fallback (np. precache'owany `index.html`), zapewniając podstawową dostępność aplikacji w trybie offline.
+- **Obsługa Powiadomień Push (`push` event):** Gdy serwer wyśle powiadomienie push do przeglądarki użytkownika, Service Worker odbiera to zdarzenie (`push`). Skrypt parsuje dane powiadomienia (oczekując formatu JSON z polami `title`, `body`, `url`) i używa API `self.registration.showNotification()` do wyświetlenia powiadomienia systemowego użytkownikowi. Dodaje ikony (`icon`, `badge`) i opcjonalnie dołącza dodatkowe dane (`data`), np. URL, który ma zostać otwarty po kliknięciu.
+- **Obsługa Kliknięć w Powiadomienia (`notificationclick` event):** Gdy użytkownik kliknie w powiadomienie push, Service Worker odbiera zdarzenie `notificationclick`. Skrypt zamyka powiadomienie i używa `clients.openWindow()` do otwarcia okna przeglądarki, nawigując do URL z danych powiadomienia (`event.notification.data.url`).
+
+#### 3.4. `server.js`
+
+Jest to główny plik back-endu, implementujący serwer aplikacji i API. Kluczowe elementy to:
+
+- **Konfiguracja i Połączenie z DB:** Plik konfiguruje Express, wczytuje zmienne środowiskowe (np. URI do MongoDB) za pomocą `dotenv` i ustanawia połączenie z bazą danych MongoDB przy użyciu biblioteki Mongoose.
+- **Modele Danych (Mongoose Schemas):** Definiuje schematy i modele Mongoose dla głównych kolekcji danych: `Tx` (transakcje: userId, typ, kwota, kategoria, data), `Sub` (subskrypcje powiadomień push: userId, obiekt subskrypcji), `Budget` (budżety: userId, kategoria, limit), `BudgetNotification` (śledzenie wysłanych powiadomień budżetowych: userId, kategoria, miesiąc/rok, czas wysłania) oraz `User` (użytkownicy: login, hasło - **UWAGA: hasło przechowywane w plain text, co jest niebezpieczne i wymaga zmiany na haszowanie w środowisku produkcyjnym**).
+- **API RESTful:** Implementuje endpointy API do obsługi logiki biznesowej:
+    - `POST /api/register`: Rejestracja nowego użytkownika (sprawdzenie unikalności loginu, tworzenie rekordu User).
+    - `POST /api/login`: Logowanie użytkownika (sprawdzenie loginu i hasła). Zwraca `userId` (login) po pomyślnym zalogowaniu.
+    - `POST /api/transactions`: Dodawanie nowej transakcji. **Zaimplementowana logika:** Po dodaniu wydatku, sprawdza, czy przekroczony został ustawiony budżet dla danej kategorii w bieżącym miesiącu. Jeśli tak, pobiera subskrypcje push użytkownika i wysyła powiadomienie o przekroczeniu budżetu. Obecnie usunięto logikę zapobiegającą wielokrotnemu wysyłaniu powiadomienia o tym samym przekroczeniu budżetu w danym miesiącu (zakomentowany model `BudgetNotification` i powiązana logika).
+    - `GET /api/transactions`: Pobieranie wszystkich transakcji dla danego `userId`, sortowanych malejąco według daty.
+    - `POST /api/subscribe`: Zapisywanie subskrypcji powiadomień push dla danego `userId`. Wykorzystuje `findOneAndUpdate` z opcją `upsert: true`, aby dodać lub zaktualizować subskrypcję.
+    - `POST /api/budgets`: Ustawianie lub aktualizacja limitu budżetu dla danej kategorii i użytkownika (`upsert: true`).
+    - `GET /api/budgets`: Pobieranie wszystkich budżetów dla danego `userId`.
+    - `GET /api/reports/summary`: Generowanie podsumowania transakcji w danym zakresie dat dla danego użytkownika, grupując według typu (przychód/wydatek) i kategorii. Używa agregacji MongoDB.
+    - `GET /api/vapid-public-key`: Udostępnianie publicznego klucza VAPID, niezbędnego front-endowi do subskrypcji powiadomień push.
+- **Powiadomienia Push (WebPush):** Konfiguruje bibliotekę `webpush` z kluczami VAPID pobranymi ze zmiennych środowiskowych (`.env`). Logika wysyłania powiadomień jest zintegrowana w endpointcie `POST /api/transactions`.
+- **Serwowanie Statycznych Plików:** Używa `express.static` do serwowania plików z katalogu `public`, w tym głównego `index.html` jako fallback dla żądań nawigacji (`app.get('*')`).
+- **Serwer HTTPS:** Aplikacja jest uruchamiana na serwerze HTTPS przy użyciu modułu `https` i lokalnych certyfikatów SSL (`localhost+2-key.pem`, `localhost+2.pem`).
+
+#### 3.5. `docker-compose.yml`
+
+Plik konfiguracyjny dla Docker Compose, definiujący wielokontenerowe środowisko aplikacji. Upraszcza uruchamianie i zarządzanie zależnościami między usługami:
+
+- **Usługa `mongo`:** Definiuje kontener dla bazy danych MongoDB, używając standardowego obrazu `mongo:7`. Konfiguruje mapowanie portów (`27017:27017`) i trwały wolumen danych (`mongo-data`) do przechowywania danych bazy poza kontenerem.
+- **Usługa `finassist`:** Definiuje kontener dla aplikacji Node.js. Używa instrukcji `build: .`, co oznacza, że obraz Dockera zostanie zbudowany na podstawie `Dockerfile` znajdującego się w tym samym katalogu. Konfiguruje zmienne środowiskowe (`NODE_ENV`, `PORT`, `MONGO_URI` - odwołujące się do nazwy usługi `mongo`), a także przekazuje klucze VAPID z pliku `.env` hosta. Mapuje port aplikacji (`3001:3001`) i definiuje zależność od usługi `mongo` (`depends_on: - mongo`), zapewniając, że kontener MongoDB zostanie uruchomiony przed kontenerem aplikacji. Ustawienie `restart: unless-stopped` zapewnia automatyczny restart kontenerów w przypadku awarii.
+- **Wolumeny (`volumes`):** Definiuje nazwany wolumen `mongo-data` do przechowywania danych MongoDB, zapewniając ich trwałość niezależnie od cyklu życia kontenera bazy danych.
+
+#### 3.6. `Dockerfile`
+
+(Nie został dostarczony w treści rozmowy, ale jest implikowany przez `docker-compose.yml`) Plik ten powinien zawierać instrukcje do zbudowania obrazu Dockera dla aplikacji Node.js, np. wybór obrazu bazowego (np. `node:lts`), kopiowanie plików aplikacji, instalację zależności (`npm install`) i zdefiniowanie komendy startowej.
+
+### 4. Podsumowanie Stanu Obecnego
+
+Obecny stan projektu implementuje podstawową architekturę PWA z back-endem w Node.js i bazą danych MongoDB. Zrealizowane zostały kluczowe funkcje zarządzania transakcjami, budżetowania i powiadomień push (w tym specyficzna logika powiadomień o przekroczeniu budżetu). Konfiguracja Docker Compose pozwala na łatwe uruchomienie całego środowiska. Elementy PWA (Manifest, Service Worker z cache'owaniem i obsługą powiadomień) są zaimplementowane, umożliwiając instalację aplikacji i podstawową pracę offline, a także odbiór powiadomień push.
+
+Brakuje jeszcze pełnej implementacji zaawansowanych raportów i analiz, generowania raportów PDF, a także kluczowych aspektów bezpieczeństwa, takich jak haszowanie haseł i mechanizmy autoryzacji (np. tokeny JWT) do zarządzania sesjami użytkowników po zalogowaniu.
+
+### 5. Dalsze Kroki Rozwoju
+
+Zgodnie z pierwotnym planem i obecnym stanem projektu, dalsze prace powinny obejmować:
+
+- **Udoskonalenie Interfejsu Użytkownika:** Rozbudowa UI na froncie, poprawa UX, dodanie bardziej zaawansowanych formularzy i widoków dla budżetowania i raportowania.
+- **Pełna Implementacja Raportów i Analizy:** Zaimplementowanie po stronie front-endu wizualizacji danych (wykresy, tabele podsumowań) na podstawie danych z API `/api/reports/summary`.
+- **Generowanie Raportów PDF:** Dodanie nowego endpointu API w `server.js` do generowania raportów w formacie PDF. Może to wymagać użycia dedykowanej biblioteki Node.js do generowania PDF (np. `pdfmake`, `puppeteer` do renderowania HTML do PDF). Na froncie należy dodać interfejs do wyzwalania generowania i pobierania raportu.
+- **Implementacja Bezpieczeństwa:**
+    - **Haszowanie Haseł:** Zmiana przechowywania haseł w modelu `User` na haszowanie (np. za pomocą biblioteki `bcrypt`).
+    - **Autoryzacja:** Wdrożenie mechanizmu autoryzacji (np. JWT) do zabezpieczenia endpointów API. Po pomyślnym logowaniu serwer powinien zwracać token, który front-end będzie dołączał do kolejnych żądań do API, a serwer będzie go weryfikował.
+    - **Walidacja Wejścia:** Wzmocnienie walidacji danych wejściowych po stronie serwera dla wszystkich endpointów API, aby zapobiec błędom i potencjalnym lukom bezpieczeństwa.
+- **Udoskonalenie Budżetowania i Powiadomień:** Implementacja bardziej elastycznych okresów budżetowych (np. tygodniowe, roczne), możliwość ustawiania wielu budżetów, lepsze zarządzanie powiadomieniami (np. konfiguracja progów powiadomień, historia powiadomień). Przywrócenie logiki śledzenia wysłanych powiadomień budżetowych (`BudgetNotification`) w celu uniknięcia spamu.
+- **Testy:** Dodanie testów jednostkowych i integracyjnych dla logiki back-endu i kluczowych funkcji front-endu.
+- **Optymalizacja i Skalowanie:** Rozważenie optymalizacji zapytań do bazy danych i architektury pod kątem potencjalnego wzrostu liczby użytkowników i danych.
+
+To sprawozdanie przedstawia aktualny stan projektu FinAssist i wskazuje kierunki dalszego rozwoju, aby w pełni zrealizować założone cele aplikacji PWA do zarządzania finansami.

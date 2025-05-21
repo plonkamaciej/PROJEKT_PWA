@@ -1,36 +1,72 @@
 const DB_NAME = 'FinAssistDB';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_NAME = 'transactions';
 
-let db;
+let db = null;
+let dbPromise = null;
 
-function openDb() {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
+async function openDbWithRetry(retries = 3, delay = 100) {
+    for (let i = 0; i < retries; i++) {
+        try {
+            console.log(`[IndexedDB] Attempting to open DB (retry ${i + 1}/${retries})...`);
+            return await new Promise((resolve, reject) => {
+                const request = indexedDB.open(DB_NAME, DB_VERSION);
 
-    request.onupgradeneeded = e => {
-      const db = e.target.result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME, { keyPath: '_id' });
-      }
-      if (!db.objectStoreNames.contains('budgets')) {
-        db.createObjectStore('budgets', { keyPath: 'userId' });
-      }
-    };
+                request.onupgradeneeded = e => {
+                  console.log('[IndexedDB] Upgrade needed', e.oldVersion, 'to', e.newVersion);
+                  const db = e.target.result;
+                  if (!db.objectStoreNames.contains(STORE_NAME)) {
+                    console.log('[IndexedDB] Creating', STORE_NAME, 'store');
+                    db.createObjectStore(STORE_NAME, { keyPath: '_id' });
+                  }
+                  if (db.objectStoreNames.contains('budgets')) {
+                     console.log('[IndexedDB] Deleting old budgets store');
+                     db.deleteObjectStore('budgets');
+                  }
+                  console.log('[IndexedDB] Creating new budgets store with keyPath _id');
+                  db.createObjectStore('budgets', { keyPath: '_id' });
+                };
 
-    request.onsuccess = e => {
-      db = e.target.result;
-      resolve(db);
-    };
+                request.onsuccess = e => {
+                  db = e.target.result;
+                  console.log('[IndexedDB] Database opened successfully');
+                  resolve(db);
+                };
 
-    request.onerror = e => {
-      reject('Error opening DB:' + e.target.errorCode);
-    };
-  });
+                request.onerror = e => {
+                  console.error('[IndexedDB] Error opening DB request:', e);
+                  console.error('[IndexedDB] Error object:', e.target.error);
+                  reject('Error opening DB: ' + (e.target.errorCode || (e.target.error ? e.target.error.name : 'Unknown error')));
+                };
+
+                 request.onblocked = (event) => {
+                    console.warn('[IndexedDB] Database open request blocked. Please close all other tabs with this site.', event);
+                };
+            });
+        } catch (error) {
+            console.error(`[IndexedDB] Failed to open DB attempt ${i + 1}:`, error);
+            if (i < retries - 1) {
+                console.log(`[IndexedDB] Retrying in ${delay}ms...`);
+                await new Promise(res => setTimeout(res, delay));
+            }
+        }
+    }
+    throw new Error(`[IndexedDB] Failed to open database after ${retries} retries.`);
+}
+
+function getDb() {
+  if (!dbPromise) {
+    dbPromise = openDbWithRetry().catch(error => {
+      console.error("[IndexedDB] Final failure to open IndexedDB:", error);
+      dbPromise = null;
+      throw error;
+    });
+  }
+  return dbPromise;
 }
 
 export async function add(tx) {
-  if (!db) await openDb();
+  const db = await getDb();
   return new Promise((resolve, reject) => {
     const transaction = db.transaction([STORE_NAME], 'readwrite');
     const store = transaction.objectStore(STORE_NAME);
@@ -42,13 +78,14 @@ export async function add(tx) {
     };
 
     request.onerror = e => {
-      reject('Error adding transaction:' + e.target.errorCode);
+      console.error('[IndexedDB] Error adding transaction:', e);
+      reject('Error adding transaction:' + (e.target.errorCode || (e.target.error ? e.target.error.name : 'Unknown error')));
     };
   });
 }
 
 export async function getAll() {
-  if (!db) await openDb();
+  const db = await getDb();
   return new Promise((resolve, reject) => {
     const transaction = db.transaction([STORE_NAME], 'readonly');
     const store = transaction.objectStore(STORE_NAME);
@@ -59,13 +96,14 @@ export async function getAll() {
     };
 
     request.onerror = e => {
-      reject('Error getting all transactions:' + e.target.errorCode);
+      console.error('[IndexedDB] Error getting all transactions:', e);
+      reject('Error getting all transactions:' + (e.target.errorCode || (e.target.error ? e.target.error.name : 'Unknown error')));
     };
   });
 }
 
 export async function remove(id) {
-  if (!db) await openDb();
+  const db = await getDb();
   return new Promise((resolve, reject) => {
     const transaction = db.transaction([STORE_NAME], 'readwrite');
     const store = transaction.objectStore(STORE_NAME);
@@ -76,13 +114,14 @@ export async function remove(id) {
     };
 
     request.onerror = e => {
-      reject('Error removing transaction:' + e.target.errorCode);
+      console.error('[IndexedDB] Error removing transaction:', e);
+      reject('Error removing transaction:' + (e.target.errorCode || (e.target.error ? e.target.error.name : 'Unknown error')));
     };
   });
 }
 
 export async function clear() {
-  if (!db) await openDb();
+  const db = await getDb();
   return new Promise((resolve, reject) => {
     const transaction = db.transaction([STORE_NAME], 'readwrite');
     const store = transaction.objectStore(STORE_NAME);
@@ -93,13 +132,14 @@ export async function clear() {
     };
 
     request.onerror = e => {
-      reject('Error clearing transactions:' + e.target.errorCode);
+      console.error('[IndexedDB] Error clearing transactions:', e);
+      reject('Error clearing transactions:' + (e.target.errorCode || (e.target.error ? e.target.error.name : 'Unknown error')));
     };
   });
 }
 
 export async function addBudget(budget) {
-  if (!db) await openDb();
+  const db = await getDb();
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(['budgets'], 'readwrite');
     const store = transaction.objectStore('budgets');
@@ -111,13 +151,14 @@ export async function addBudget(budget) {
     };
 
     request.onerror = e => {
-      reject('Error adding budget:' + e.target.errorCode);
+      console.error('[IndexedDB] Error adding budget:', e);
+      reject('Error adding budget:' + (e.target.errorCode || (e.target.error ? e.target.error.name : 'Unknown error')));
     };
   });
 }
 
 export async function getAllBudgets() {
-  if (!db) await openDb();
+  const db = await getDb();
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(['budgets'], 'readonly');
     const store = transaction.objectStore('budgets');
@@ -128,30 +169,32 @@ export async function getAllBudgets() {
     };
 
     request.onerror = e => {
-      reject('Error getting all budgets:' + e.target.errorCode);
+      console.error('[IndexedDB] Error getting all budgets:', e);
+      reject('Error getting all budgets:' + (e.target.errorCode || (e.target.error ? e.target.error.name : 'Unknown error')));
     };
   });
 }
 
-export async function removeBudget(userId) {
-  if (!db) await openDb();
+export async function removeBudget(_id) {
+  const db = await getDb();
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(['budgets'], 'readwrite');
     const store = transaction.objectStore('budgets');
-    const request = store.delete(userId);
+    const request = store.delete(_id);
 
     request.onsuccess = () => {
       resolve();
     };
 
     request.onerror = e => {
-      reject('Error removing budget:' + e.target.errorCode);
+      console.error('[IndexedDB] Error removing budget:', e);
+      reject('Error removing budget:' + (e.target.errorCode || (e.target.error ? e.target.error.name : 'Unknown error')));
     };
   });
 }
 
 export async function clearBudgets() {
-  if (!db) await openDb();
+  const db = await getDb();
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(['budgets'], 'readwrite');
     const store = transaction.objectStore('budgets');
@@ -162,10 +205,8 @@ export async function clearBudgets() {
     };
 
     request.onerror = e => {
-      reject('Error clearing budgets:' + e.target.errorCode);
+      console.error('[IndexedDB] Error clearing budgets:', e);
+      reject('Error clearing budgets:' + (e.target.errorCode || (e.target.error ? e.target.error.name : 'Unknown error')));
     };
   });
 }
-
-// Open the database when the script loads
-openDb().catch(console.error);
