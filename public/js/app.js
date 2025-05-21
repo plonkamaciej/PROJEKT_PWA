@@ -28,7 +28,7 @@ const USER_ID_STORAGE_KEY = 'finassist-user-id'; // Klucz do przechowywania user
 
 // INIT
 // Sprawdź stan logowania przy starcie aplikacji
-function checkLoginStatus() {
+async function checkLoginStatus() {
   const storedUserId = localStorage.getItem(USER_ID_STORAGE_KEY);
   if (storedUserId) {
     USER_ID = storedUserId;
@@ -37,14 +37,60 @@ function checkLoginStatus() {
     if (loggedInUserEl) {
         loggedInUserEl.textContent = USER_ID; // Wyświetl nazwę użytkownika po odczytaniu z localStorage
     }
-    // Renderuj tylko sekcje, które są obecne na danej stronie
+
+    // --- Nowa/zmodyfikowana logika: Zawsze pobieraj najnowsze dane z backendu po zalogowaniu ---
+    console.log('Użytkownik zalogowany. Próba pobrania najnowszych danych z backendu...');
+    try {
+        // Pobierz transakcje z backendu
+        const txResponse = await fetch(`/api/transactions?userId=${USER_ID}`);
+        if (txResponse.ok) {
+            const transactions = await txResponse.json();
+            console.log('Pobrano transakcje z backendu:', transactions.length);
+            // Zapisz transakcje w IndexedDB (funkcja add używa put, więc zaktualizuje istniejące lub doda nowe)
+            for (const tx of transactions) {
+                // Upewnij się, że dane z backendu mają synced: true
+                await store.add({ ...tx, synced: true });
+            }
+            console.log('Transakcje zapisane w IndexedDB po zalogowaniu/synchronizacji.');
+        } else {
+            console.error('Błąd pobierania transakcji z backendu:', txResponse.status, txResponse.statusText);
+            // Można dodać UI feedback dla użytkownika o błędzie synchronizacji z serwerem
+        }
+
+        // Pobierz budżety z backendu
+        const budgetResponse = await fetch(`/api/budgets?userId=${USER_ID}`);
+        if (budgetResponse.ok) {
+            const budgets = await budgetResponse.json();
+             console.log('Pobrano budżety z backendu:', budgets.length);
+            // Zapisz budżety w IndexedDB
+            for (const budget of budgets) {
+                 // Upewnij się, że dane z backendu mają synced: true
+                await store.addBudget({ ...budget, synced: true });
+            }
+             console.log('Budżety zapisane w IndexedDB po logowaniu/synchronizacji.');
+        } else {
+            console.error('Błąd pobierania budżetów z backendu:', budgetResponse.status, budgetResponse.statusText);
+             // Można dodać UI feedback dla użytkownika o błędzie synchronizacji z serwerem
+        }
+
+    } catch (error) {
+        console.error('Błąd sieci/serwera podczas pobierania danych po logowaniu/synchronizacji:', error); // Log błędu
+        // Można dodać UI feedback dla użytkownika o błędzie połączenia
+    }
+    // --- Koniec nowej/zmodyfikowanej logiki ---
+
+    // Renderuj widok ZAWSZE z danych IndexedDB (teraz zaktualizowanych z backendu)
     if (document.querySelector('#list')) render(); // Renderuj transakcje
     if (document.querySelector('#budget-list')) renderBudgets(); // Renderuj budżety
     if (document.querySelector('#report-analysis')) renderReports(); // Renderuj raporty
-    // Uruchom synchronizację offline przy starcie
+
+    // Spróbuj wysłać oczekujące dane offline do backendu
     synchronizeOfflineTransactions();
     synchronizeOfflineBudgets();
-    registerServiceWorkerAndPush(); // Zarejestruj SW i Push po zalogowaniu/odczytaniu userId
+
+    // Zarejestruj Service Worker i Push (tylko jeśli jeszcze nie zarejestrowano)
+    registerServiceWorkerAndPush();
+
   } else {
     console.log('Brak userId w localStorage, wyświetlam formularz logowania.'); // Log braku logowania
     showAuthForm();
@@ -212,7 +258,7 @@ authForm.addEventListener('submit', async (e) => {
 // w fetchach do /api/transactions, /api/budgets, /api/reports, /api/subscribe
 // w obiektach transakcji i budżetów przed zapisem do IndexedDB
 
-// Uruchom sprawdzanie stanu logowania po załadowaniu DOM
+// Uruchom sprawdzanie stanu logowania po załadowaniu DOM - BEZ opóźnienia, ale asynchronicznie
 document.addEventListener('DOMContentLoaded', checkLoginStatus);
 
 form.addEventListener('submit', async e => {
