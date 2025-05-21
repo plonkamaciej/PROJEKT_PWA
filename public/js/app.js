@@ -12,6 +12,10 @@ const budgetListEl = document.querySelector('#budget-list');
 const monthlySummaryEl = document.querySelector('#monthly-summary');
 const categoryBreakdownEl = document.querySelector('#category-breakdown');
 
+// --- Nowa referencja do elementu select kategorii transakcji ---
+const categorySelectEl = document.querySelector('#category-select');
+// --- Koniec nowej referencji ---
+
 // Nowe referencje do elementów autoryzacji i głównej aplikacji
 const authContainer = document.querySelector('#auth-container');
 const authForm = document.querySelector('#auth-form');
@@ -303,6 +307,9 @@ budgetForm.addEventListener('submit', async e => {
     userId: USER_ID,
     // TODO: Add a unique identifier for budgets if needed for more complex sync (e.g., category + userId?)
     // Na razie IndexedDB używa userId jako keyPath, co zakłada 1 budżet per user globalnie lub per kategorię jeśli keyPath byłby [userId, category]
+    // --- Przywrócono generowanie tymczasowego _id na frontendzie ---
+    _id: Date.now() + Math.random().toString(36).substring(2, 9),
+    // --- Koniec przywracania _id ---
     synced: false // Nowa flaga: domyślnie nie zsynchronizowano
   };
 
@@ -312,7 +319,28 @@ budgetForm.addEventListener('submit', async e => {
     await store.addBudget(budget); // Użyj funkcji addBudget (która teraz używa put i dodaje synced flag)
     console.log('Budżet zapisany w IndexedDB.'); // Log B2
 
-    renderBudgets(); // Odśwież widok z danych z IndexedDB
+    // --- Nowa logika: Wyczyść IndexedDB i pobierz wszystkie budżety z backendu po dodaniu ---
+    console.log('Czyszczenie IndexedDB (budżety) i pobieranie z backendu po dodaniu budżetu...');
+    try {
+      await store.clearBudgets(); // Wyczyść lokalne budżety
+      const budgetResponse = await fetch(`/api/budgets?userId=${USER_ID}`);
+      if (budgetResponse.ok) {
+          const budgets = await budgetResponse.json();
+           console.log('Pobrano budżety z backendu po dodaniu:', budgets.length);
+          // Zapisz zaktualizowane budżety w IndexedDB
+          for (const budget of budgets) {
+              await store.addBudget({ ...budget, synced: true });
+          }
+           console.log('Zaktualizowano budżety w IndexedDB po dodaniu.');
+      } else {
+          console.error('Błąd pobierania budżetów z backendu po dodaniu:', budgetResponse.status, budgetResponse.statusText);
+      }
+    } catch (error) {
+       console.error('Błąd podczas synchronizacji budżetów z backendu po dodaniu:', error);
+    }
+    // --- Koniec nowej logiki ---
+
+    renderBudgets(); // Odśwież widok z danych z IndexedDB (teraz zsynchronizowanych z backendu)
     // synchronizeOfflineBudgets(); // Spróbuj od razu zsynchronizować z backendem (zrobimy to w następnym kroku)
 
   } catch (error) {
@@ -390,6 +418,10 @@ async function renderBudgets() {
       `<li data-id="${b._id}">${b.category}: ${b.limit.toFixed(2)} zł <button class="delete-budget-btn">Usuń</button></li>`
     ).join('');
      console.log('[RenderBudgets] Renderowanie listy budżetów z danych z IndexedDB.'); // Log render_budgets_ui_indexeddb
+
+    // --- Po renderowaniu budżetów, zaktualizuj listę kategorii w formularzu transakcji ---
+    populateCategorySelect(budgets.map(b => b.category));
+    // --- Koniec aktualizacji listy kategorii ---
 
   } catch (error) {
     console.error('Błąd podczas wczytywania budżetów z IndexedDB (renderBudgets):', error); // Log render_budgets_indexeddb_error
@@ -765,3 +797,22 @@ if (budgetListEl) { // Upewnij się, że element listy istnieje
         }
     });
 }
+
+// --- Nowa funkcja do wypełniania selecta kategorii transakcji ---
+function populateCategorySelect(categories) {
+    // Sprawdź, czy element select istnieje
+    if (!categorySelectEl) return;
+
+    // Wyczyść obecne opcje, zachowując pierwszą (domyślną)
+    categorySelectEl.innerHTML = '<option value="">Wybierz kategorię</option>';
+
+    // Dodaj opcje na podstawie listy kategorii budżetów
+    categories.forEach(category => {
+        const option = document.createElement('option');
+        option.value = category;
+        option.textContent = category;
+        categorySelectEl.appendChild(option);
+    });
+    console.log('Zaktualizowano listę kategorii w formularzu transakcji.'); // Log aktualizacji selecta
+}
+// --- Koniec nowej funkcji ---
