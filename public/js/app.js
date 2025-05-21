@@ -387,7 +387,7 @@ async function renderBudgets() {
     console.log('[RenderBudgets] Dane wczytane z IndexedDB:', budgets.length, 'rekordów (dla zalogowanego usera).'); // Log render_budgets_fetch_indexeddb_success
 
     budgetListEl.innerHTML = budgets.map(b =>
-      `<li>${b.category}: ${b.limit.toFixed(2)} zł</li>`
+      `<li data-id="${b._id}">${b.category}: ${b.limit.toFixed(2)} zł <button class="delete-budget-btn">Usuń</button></li>`
     ).join('');
      console.log('[RenderBudgets] Renderowanie listy budżetów z danych z IndexedDB.'); // Log render_budgets_ui_indexeddb
 
@@ -711,4 +711,57 @@ function urlBase64ToUint8Array(base64String) {
     outputArray[i] = rawData.charCodeAt(i);
   }
   return outputArray;
+}
+
+// --- Nowa funkcja do usuwania budżetu ---
+async function deleteBudget(id) {
+    console.log('Próba usunięcia budżetu z ID:', id); // Log start usuwania
+
+    // 1. Usuń z IndexedDB (szybki update UI)
+    try {
+        await store.removeBudget(id);
+        console.log('Usunięto budżet z IndexedDB:', id); // Log usunięcia z IDB
+        renderBudgets(); // Odśwież listę na ekranie natychmiast
+    } catch (error) {
+        console.error('Błąd podczas usuwania budżetu z IndexedDB:', error); // Log błędu IDB
+        // Kontynuuj, próbując usunąć z backendu, nawet jeśli usunięcie lokalne się nie powiodło
+    }
+
+    // 2. Usuń z backendu
+    try {
+        const response = await fetch(`/api/budgets/${id}?userId=${USER_ID}`, {
+            method: 'DELETE',
+        });
+
+        if (response.ok) {
+            console.log('Usunięto budżet z backendu:', id); // Log usunięcia z backendu
+            // Jeśli usunięcie z backendu się powiodło, a z IndexedDB nie (rzadki przypadek),
+            // kolejne pobranie danych z backendu przy odświeżeniu naprawi stan IndexedDB.
+        } else {
+            console.error('Błąd serwera podczas usuwania budżetu:', response.status, response.statusText); // Log błędu backendu
+            // Można dodać logikę do oznaczenia budżetu w IndexedDB jako "do usunięcia" przy synchronizacji
+            // Obecnie, jeśli backend zwróci błąd, budżet pozostanie w IndexedDB do kolejnego pełnego pobrania z backendu.
+        }
+    } catch (error) {
+        console.error('Błąd sieci podczas usuwania budżetu z backendu:', error); // Log błędu sieci
+        // Jak wyżej, można dodać logikę synchronizacji usuwania offline
+    }
+}
+
+// --- Delegacja zdarzeń dla przycisków usuwania budżetów ---
+if (budgetListEl) { // Upewnij się, że element listy istnieje
+    budgetListEl.addEventListener('click', async (event) => {
+        // Sprawdź, czy kliknięto w przycisk z klasą 'delete-budget-btn'
+        if (event.target.classList.contains('delete-budget-btn')) {
+            // Znajdź najbliższy element listy <li> (rodzic przycisku)
+            const listItem = event.target.closest('li');
+            if (listItem) {
+                // Pobierz ID budżetu z atrybutu data-id
+                const budgetId = listItem.dataset.id;
+                if (budgetId) {
+                    await deleteBudget(budgetId); // Wywołaj funkcję usuwania z ID
+                }
+            }
+        }
+    });
 }

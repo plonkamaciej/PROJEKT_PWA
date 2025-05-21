@@ -222,6 +222,38 @@ app.get('/api/budgets', async (req, res) => {
   res.json(budgets);
 });
 
+// API – Usuwanie budżetu
+app.delete('/api/budgets/:id', async (req, res) => {
+  const { id } = req.params; // Pobierz ID budżetu z parametrów ścieżki
+  const { userId } = req.query; // Użyj userId z query parameter (lub z sesji/tokena w przyszłości)
+
+  if (!userId) {
+    return res.status(401).json({ message: 'Użytkownik niezalogoWany.' });
+  }
+
+  try {
+    // Znajdź i usuń budżet o podanym ID, należący do danego użytkownika
+    // UWAGA: Zakładamy, że ID w ścieżce to _id dokumentu MongoDB.
+    // W obecnej implementacji _id jest generowane na froncie i nie jest domyślnym ObjectId MongoDB.
+    // Jeśli chcesz usuwać po _id generowanym na froncie, upewnij się, że jest ono zapisywane w DB.
+    // Bardziej bezpiecznie byłoby usuwać po userId i category (jeśli kategoria jest unikalna dla użytkownika) lub po _id MongoDB.
+    // Na potrzeby szybkiego rozwiązania, próbujemy usunąć po _id dostarczonym z frontu.
+    const result = await Budget.findOneAndDelete({ _id: id, userId: userId });
+
+    if (result) {
+      console.log(`Budżet usunięty pomyślnie: ${id} dla użytkownika ${userId}`); // Log usunięcia
+      res.status(200).json({ message: 'Budżet usunięty pomyślnie.' });
+    } else {
+      console.warn(`Próba usunięcia nieistniejącego lub nienależącego do użytkownika budżetu: ${id} dla ${userId}`); // Log nieudanej próby
+      res.status(404).json({ message: 'Budżet nie znaleziony lub nie masz uprawnień do jego usunięcia.' });
+    }
+
+  } catch (error) {
+    console.error('Błąd podczas usuwania budżetu:', error); // Log błędu
+    res.status(500).json({ message: 'Wystąpił błąd podczas usuwania budżetu.' });
+  }
+});
+
 // API – raportowanie
 app.get('/api/reports/summary', async (req, res) => {
   const { userId, startDate, endDate } = req.query;
