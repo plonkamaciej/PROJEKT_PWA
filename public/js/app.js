@@ -16,6 +16,11 @@ const categoryBreakdownEl = document.querySelector('#category-breakdown');
 const categorySelectEl = document.querySelector('#category-select');
 // --- Koniec nowej referencji ---
 
+// --- Nowe referencje do elementów typu transakcji i kontenera kategorii ---
+const txTypeSelect = document.querySelector('#tx-type');
+const categoryFieldContainer = document.querySelector('#category-field');
+// --- Koniec nowych referencji ---
+
 // Nowe referencje do elementów autoryzacji i głównej aplikacji
 const authContainer = document.querySelector('#auth-container');
 const authForm = document.querySelector('#auth-form');
@@ -278,6 +283,11 @@ form.addEventListener('submit', async e => {
     _id: Date.now() + Math.random().toString(36).substring(2, 9), // Generujemy tymczasowe _id na frontendzie
     synced: false // Nowa flaga: domyślnie nie zsynchronizowano
   };
+  // --- Usuń pole kategorii jeśli typ to 'income' ---
+  if (tx.type === 'income') {
+    delete tx.category;
+  }
+  // --- Koniec usuwania kategorii ---
   console.log('Przygotowana transakcja:', tx); // Log S3
 
   // Zawsze zapisuj do IndexedDB jako pierwsze źródło prawdy
@@ -319,29 +329,10 @@ budgetForm.addEventListener('submit', async e => {
     await store.addBudget(budget); // Użyj funkcji addBudget (która teraz używa put i dodaje synced flag)
     console.log('Budżet zapisany w IndexedDB.'); // Log B2
 
-    // --- Nowa logika: Wyczyść IndexedDB i pobierz wszystkie budżety z backendu po dodaniu ---
-    console.log('Czyszczenie IndexedDB (budżety) i pobieranie z backendu po dodaniu budżetu...');
-    try {
-      await store.clearBudgets(); // Wyczyść lokalne budżety
-      const budgetResponse = await fetch(`/api/budgets?userId=${USER_ID}`);
-      if (budgetResponse.ok) {
-          const budgets = await budgetResponse.json();
-           console.log('Pobrano budżety z backendu po dodaniu:', budgets.length);
-          // Zapisz zaktualizowane budżety w IndexedDB
-          for (const budget of budgets) {
-              await store.addBudget({ ...budget, synced: true });
-          }
-           console.log('Zaktualizowano budżety w IndexedDB po dodaniu.');
-      } else {
-          console.error('Błąd pobierania budżetów z backendu po dodaniu:', budgetResponse.status, budgetResponse.statusText);
-      }
-    } catch (error) {
-       console.error('Błąd podczas synchronizacji budżetów z backendu po dodaniu:', error);
-    }
-    // --- Koniec nowej logiki ---
-
-    renderBudgets(); // Odśwież widok z danych z IndexedDB (teraz zsynchronizowanych z backendu)
-    // synchronizeOfflineBudgets(); // Spróbuj od razu zsynchronizować z backendem (zrobimy to w następnym kroku)
+    // --- Przywrócono poprzednią logikę: Odśwież widok i spróbuj synchronizacji offline ---
+    renderBudgets(); // Odśwież widok z danych z IndexedDB
+    synchronizeOfflineBudgets(); // Spróbuj od razu zsynchronizować z backendem
+    // --- Koniec przywracania logiki ---
 
   } catch (error) {
     console.error('Błąd podczas zapisu budżetu do IndexedDB:', error); // Log B3
@@ -569,32 +560,75 @@ async function synchronizeOfflineBudgets() {
 
   if (offlineBudgets.length === 0) {
     console.log('[SyncBudgets] Brak oczekujących budżetów offline do synchronizacji.'); // Log sync_budgets_no_pending
+
+    // --- Nawet jeśli nie ma offline budżetów do wysłania, pobierz z backendu dla pewności ---
+    console.log('[SyncBudgets] Brak offline budżetów. Pobieram wszystkie z backendu...');
+    try {
+       const budgetResponse = await fetch(`/api/budgets?userId=${USER_ID}`);
+       if (budgetResponse.ok) {
+           const budgets = await budgetResponse.json();
+            console.log('[SyncBudgets] Pomyślnie pobrano budżety z backendu:', budgets.length);
+           // Wyczyść IndexedDB i zapisz budżety z backendu
+            await store.clearBudgets();
+           for (const budget of budgets) {
+                // Upewnij się, że dane z backendu mają synced: true (ID z backendu to ich prawdziwe ID)
+               await store.addBudget({ ...budget, synced: true });
+           }
+            console.log('[SyncBudgets] Zaktualizowano IndexedDB budżetami z backendu.');
+       } else {
+           console.error('[SyncBudgets] Błąd pobierania budżetów z backendu:', budgetResponse.status, budgetResponse.statusText);
+       }
+     } catch (error) {
+        console.error('[SyncBudgets] Błąd sieci podczas pobierania budżetów z backendu:', error);
+     } finally {
+        renderBudgets(); // Zawsze odśwież UI po próbie synchronizacji/pobrania
+     }
+    // --- Koniec dodanej logiki pobierania po synchronizacji ---
+
     return;
   }
 
   for (const budget of offlineBudgets) {
     try {
       const budgetToSend = { ...budget };
-      // TODO: Decide if _id should be sent for budgets, depends on backend structure.
-      // If backend uses userId + category as key, we don't need _id.
+      // Usuń tymczasowe _id generowane na frontendzie przed wysyłką do backendu,
+      // ponieważ backend nie używa go do matchingu POSTem (używa userId + category)
+      delete budgetToSend._id;
 
       console.log('[SyncBudgets] Próba wysłania budżetu offline do backendu:', budgetToSend); // Log sync_budgets_send
 
-      const response = await fetch('/api/budgets', {
-        method: 'POST', // lub PUT jeśli aktualizujemy istniejący
+      const response = await fetch('/api/budgets', { // Nadal POST, backend używa upsert na userId+category
+        method: 'POST',
         headers: { 'Content-Type':'application/json' },
         body: JSON.stringify(budgetToSend)
       });
 
       if (response.ok) {
-        console.log('[SyncBudgets] Zsynchronizowano budżet offline (backend OK). Oryginalny key:', budget.userId); // Log sync_budgets_success (używając userId jako identyfikatora)
+        console.log('[SyncBudgets] Zsynchronizowano budżet offline (backend OK). Oryginalne _id (frontend): ', budget._id); // Log sync_budgets_success (używając userId jako identyfikatora)
 
-        // Aktualizuj rekord w IndexedDB, ustawiając synced na true
-        const updatedBudget = { ...budget, synced: true };
-        console.log('[SyncBudgets] Aktualizowanie rekordu w IndexedDB (synced: true) z key:', updatedBudget.userId); // Log sync_budgets_update_start
-        await store.addBudget(updatedBudget); // Użyj addBudget (put), aby zaktualizować rekord
-        console.log('[SyncBudgets] Zaktualizowano rekord w IndexedDB (synced: true) z key:', updatedBudget.userId); // Log sync_budgets_update_end
-
+        // --- Po pomyślnej synchronizacji pojedynczego budżetu, odśwież całą listę z backendu ---
+        console.log('[SyncBudgets] Budżet zsynchronizowany. Pobieram wszystkie budżety z backendu...');
+        try {
+           const budgetResponse = await fetch(`/api/budgets?userId=${USER_ID}`);
+           if (budgetResponse.ok) {
+               const budgets = await budgetResponse.json();
+                console.log('[SyncBudgets] Pomyślnie pobrano budżety z backendu:', budgets.length);
+               // Wyczyść IndexedDB i zapisz budżety z backendu
+                await store.clearBudgets();
+               for (const budget of budgets) {
+                    // Upewnij się, że dane z backendu mają synced: true (ID z backendu to ich prawdziwe ID)
+                   await store.addBudget({ ...budget, synced: true });
+               }
+                console.log('[SyncBudgets] Zaktualizowano IndexedDB budżetami z backendu po synchronizacji.');
+           } else {
+               console.error('[SyncBudgets] Błąd pobierania budżetów z backendu po synchronizacji:', budgetResponse.status, budgetResponse.statusText);
+           }
+         } catch (error) {
+            console.error('[SyncBudgets] Błąd sieci podczas pobierania budżetów z backendu po synchronizacji:', error);
+         } finally {
+            renderBudgets(); // Zawsze odśwież UI po próbie synchronizacji/pobrania
+         }
+         // --- Koniec dodanej logiki pobierania po synchronizacji ---
       } else {
         console.error('[SyncBudgets] Błąd serwera podczas synchronizacji budżetu offline:', response.status, response.statusText, budget); // Log sync_budgets_server_error
         // Nie aktualizujemy synced flagi, spróbujemy ponownie później
@@ -816,3 +850,20 @@ function populateCategorySelect(categories) {
     console.log('Zaktualizowano listę kategorii w formularzu transakcji.'); // Log aktualizacji selecta
 }
 // --- Koniec nowej funkcji ---
+
+// --- Listener zdarzeń dla zmiany typu transakcji ---
+if (txTypeSelect && categoryFieldContainer && categorySelectEl) { // Upewnij się, że elementy istnieją
+    txTypeSelect.addEventListener('change', () => {
+        if (txTypeSelect.value === 'income') {
+            // Ukryj pole kategorii i usuń atrybut required
+            categoryFieldContainer.style.display = 'none';
+            categorySelectEl.removeAttribute('required');
+        } else {
+            // Pokaż pole kategorii i dodaj atrybut required
+            categoryFieldContainer.style.display = ''; // Przywróć domyślne wyświetlanie
+            categorySelectEl.setAttribute('required', 'required');
+        }
+        console.log('Zmieniono typ transakcji na:', txTypeSelect.value, '. Pole kategorii', txTypeSelect.value === 'income' ? 'ukryte' : 'widoczne'); // Log zmiany typu
+    });
+}
+// --- Koniec listenera ---
