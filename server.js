@@ -300,11 +300,11 @@ const PORT = process.env.PORT || 3001;
 
 // Użyj certyfikatów SSL dla HTTPS
 const options = {
-  key: fs.readFileSync('localhost+2-key.pem'),
-  cert: fs.readFileSync('localhost+2.pem')
+  key: fs.readFileSync('localhost-key.pem'),
+  cert: fs.readFileSync('localhost.pem')
 };
 
-// Uruchom serwer HTTPS na porcie 3000
+// Uruchom serwer HTTPS
 https.createServer(options, app).listen(PORT, () => {
   console.log('FinAssist → https://localhost:3001'); // Log z adresem HTTPS
 });

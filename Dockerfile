@@ -15,7 +15,7 @@ COPY . .
 
 # Skopiuj certyfikaty SSL (zakładamy, że są w głównym katalogu)
 # W środowisku produkcyjnym, certyfikaty powinny być zarządzane inaczej, np. przez reverse proxy (Nginx, Traefik) lub woluminy
-COPY localhost+2-key.pem localhost+2.pem ./
+COPY localhost-key.pem localhost.pem ./
 
 # Aplikacja nasłuchuje na port 3001
 EXPOSE 3001

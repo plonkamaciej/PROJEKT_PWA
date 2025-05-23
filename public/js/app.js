@@ -522,16 +522,31 @@ async function synchronizeOfflineTransactions() {
       });
 
       if (response.ok) {
-        // const syncedTx = await response.json(); // Nie potrzebujemy już obiektu z backendu do aktualizacji _id w tym modelu synchronizacji
         console.log('[SyncTx] Zsynchronizowano transakcję offline (backend OK). Oryginalne _id:', tx._id); // Log sync_tx_success
 
-        // Aktualizuj rekord w IndexedDB, ustawiając synced na true
-        const updatedTx = { ...tx, synced: true };
-        console.log('[SyncTx] Aktualizowanie rekordu w IndexedDB (synced: true) z _id:', updatedTx._id); // Log sync_tx_update_start
-        await store.add(updatedTx); // Użyj add (put), aby zaktualizować rekord
-        console.log('[SyncTx] Zaktualizowano rekord w IndexedDB (synced: true) z _id:', updatedTx._id); // Log sync_tx_update_end
-
-        // Nie usuwamy już starego rekordu i nie dodajemy nowego z backendowym _id, bo frontendowe _id jest kluczem w IndexedDB
+        // --- Po pomyślnej synchronizacji pojedynczej transakcji, odśwież całą listę z backendu ---
+        console.log('[SyncTx] Transakcja zsynchronizowana. Pobieram wszystkie transakcje z backendu...');
+        try {
+          const txResponse = await fetch(`/api/transactions?userId=${USER_ID}`);
+          if (txResponse.ok) {
+            const transactions = await txResponse.json();
+            console.log('[SyncTx] Pomyślnie pobrano transakcje z backendu:', transactions.length);
+            // Wyczyść IndexedDB i zapisz transakcje z backendu
+            await store.clear();
+            for (const transaction of transactions) {
+              // Upewnij się, że dane z backendu mają synced: true
+              await store.add({ ...transaction, synced: true });
+            }
+            console.log('[SyncTx] Zaktualizowano IndexedDB transakcjami z backendu po synchronizacji.');
+          } else {
+            console.error('[SyncTx] Błąd pobierania transakcji z backendu po synchronizacji:', txResponse.status, txResponse.statusText);
+          }
+        } catch (error) {
+          console.error('[SyncTx] Błąd sieci podczas pobierania transakcji z backendu po synchronizacji:', error);
+        } finally {
+          render(); // Zawsze odśwież UI po próbie synchronizacji/pobrania
+        }
+        // --- Koniec dodanej logiki pobierania po synchronizacji ---
 
       } else {
         console.error('[SyncTx] Błąd serwera podczas synchronizacji transakcji offline:', response.status, response.statusText, tx); // Log sync_tx_server_error
@@ -543,10 +558,7 @@ async function synchronizeOfflineTransactions() {
       break; // Przerywamy pętlę
     }
   }
-  console.log('[SyncTx] Synchronizacja transakcji offline zakończona. Odświeżam widok.'); // Log sync_tx_end
-  // Po próbie synchronizacji, odśwież widok (pobierając z backendu)
-  render(); // Odśwież widok transakcji - render pobierze aktualne dane z backendu (co teraz powinno być zgodne z IndexedDB)
-  // Jeśli pozostały jakieś transakcje w IndexedDB, można by dodać status wizualny
+  console.log('[SyncTx] Synchronizacja transakcji offline zakończona.'); // Log sync_tx_end
 }
 
 // Nowa funkcja do synchronizacji budżetów z IndexedDB do backendu

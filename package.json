@@ -9,9 +9,7 @@
     "dependencies": {
         "dotenv": "^16.4.1",
         "express": "^4.19.2",
-        "mongoose": "^8.3.3"
-    },
-    "devDependencies": {
+        "mongoose": "^8.3.3",
         "web-push": "^3.6.7"
     }
 }
